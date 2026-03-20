@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>出欠チェッカー</title>
+<style>
+:root{--green:#34c759;--red:#ff3b30;--bg:#f2f2f7;--card:#fff;--text:#1c1c1e;--sub:#8e8e93;--border:#e5e5ea}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;padding-bottom:120px}
+header{background:#1a1a2e;color:#fff;padding:16px 16px 14px;text-align:center;position:sticky;top:0;z-index:20}
+header h1{font-size:17px;font-weight:700}
+header .event-name{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px}
+
+/* 初期画面 */
+.setup{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:20px}
+.setup p{font-size:15px;color:var(--sub);text-align:center;line-height:1.6}
+.setup .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;background:#007aff;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer}
+.setup input[type="file"]{display:none}
+.setup .format{font-size:12px;color:var(--sub);background:var(--card);border-radius:8px;padding:12px 16px;text-align:left;white-space:pre;font-family:monospace;line-height:1.5}
+
+/* リスト */
+.list{margin:8px;border-radius:12px;overflow:hidden;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.item{display:flex;align-items:center;padding:0;border-bottom:1px solid var(--border);min-height:52px;transition:background .15s}
+.item:last-child{border-bottom:none}
+.item.s-came{background:#f0faf0}
+.item.s-absent{background:#fff5f5}
+
+.item .came-btn{width:52px;height:52px;border:none;background:none;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.item .came-btn .circle{width:30px;height:30px;border-radius:50%;border:2.5px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:transparent;transition:all .15s}
+.item.s-came .came-btn .circle{border-color:var(--green);background:var(--green);color:#fff}
+
+.item .num{width:28px;font-size:12px;color:var(--sub);text-align:right;padding-right:6px;flex-shrink:0}
+.item .name{flex:1;font-size:16px;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .tag{font-size:10px;color:#e08700;background:#fff5e0;border-radius:4px;padding:1px 5px;margin-left:4px;flex-shrink:0}
+.item.s-absent .name{text-decoration:line-through;color:var(--sub)}
+
+.item .absent-btn{padding:8px 12px;margin-right:8px;border:1px solid var(--border);border-radius:6px;background:none;font-size:12px;color:var(--sub);cursor:pointer;flex-shrink:0;transition:all .15s}
+.item.s-absent .absent-btn{border-color:var(--red);background:var(--red);color:#fff}
+
+/* フッター集計 */
+.footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 16px env(safe-area-inset-bottom,0);z-index:20}
+.footer .stats{display:flex;justify-content:center;gap:16px;font-size:15px;font-weight:600}
+.footer .stats .came-count{color:var(--green)}
+.footer .stats .absent-count{color:var(--red)}
+.footer .stats .remain-count{color:var(--sub)}
+.footer .total{text-align:center;font-size:11px;color:var(--sub);margin-top:4px}
+
+/* ツールバー */
+.toolbar{display:flex;gap:8px;padding:8px 12px;justify-content:flex-end;align-items:center}
+.toolbar button{padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:13px;color:var(--sub);cursor:pointer}
+.toolbar .add-wrap{display:flex;gap:6px;flex:1}
+.toolbar .add-wrap input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);min-width:0}
+.toolbar .add-wrap button{color:#007aff;border-color:#007aff;white-space:nowrap}
+
+/* dialog */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:var(--card);border-radius:14px;padding:24px;width:280px;text-align:center}
+.modal p{font-size:15px;margin-bottom:16px}
+.modal .actions{display:flex;gap:8px;justify-content:center}
+.modal .actions button{flex:1;padding:10px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.modal .cancel{background:var(--bg);color:var(--text)}
+.modal .danger{background:var(--red);color:#fff}
+</style>
+</head>
+<body>
+
+<!-- 初期画面 -->
+<div id="setupView">
+<header>
+<h1>出欠チェッカー</h1>
+</header>
+<div class="setup">
+<p>参加者名簿の<br>テキストファイルを読み込んでください</p>
+<div class="format">田中太郎
+山田花子
+佐藤次郎
+...</div>
+<label class="btn">
+ファイルを選択
+<input type="file" id="fileInput" accept=".txt,text/plain">
+</label>
+</div>
+</div>
+
+<!-- チェックリスト画面 -->
+<div id="mainView" style="display:none">
+<header>
+<h1>出欠チェッカー</h1>
+<div class="event-name" id="eventName"></div>
+</header>
+<div class="toolbar">
+<div class="add-wrap">
+<input type="text" id="addInput" placeholder="名前を追加">
+<button id="addBtn">追加</button>
+</div>
+<button id="resetBtn">リセット</button>
+<button id="newBtn">新規</button>
+</div>
+<div class="list" id="list"></div>
+<div class="footer">
+<div class="stats">
+<span class="came-count" id="cameCount">来場 0</span>
+<span class="absent-count" id="absentCount">不参加 0</span>
+<span class="remain-count" id="remainCount">未確認 0</span>
+</div>
+<div class="total" id="totalText"></div>
+</div>
+</div>
+
+<!-- 確認ダイアログ -->
+<div class="modal-bg" id="modalBg">
+<div class="modal">
+<p id="modalMsg"></p>
+<div class="actions">
+<button class="cancel" id="modalCancel">キャンセル</button>
+<button class="danger" id="modalOk">実行</button>
+</div>
+</div>
+</div>
+
+<script>
+var STORAGE_KEY = "attendance_data";
+var state = null; // { fileName, names: [{name, tag, status}] }
+
+// --- Storage ---
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch(e) { return null; }
+}
+
+// --- Render ---
+function render() {
+  var list = document.getElementById("list");
+  list.innerHTML = "";
+  var came = 0, absent = 0;
+
+  for (var i = 0; i < state.names.length; i++) {
+    var p = state.names[i];
+    if (p.status === "came") came++;
+    if (p.status === "absent") absent++;
+
+    var div = document.createElement("div");
+    div.className = "item" + (p.status === "came" ? " s-came" : p.status === "absent" ? " s-absent" : "");
+    div.setAttribute("data-idx", i);
+
+    var html = '<button class="came-btn" data-action="came"><span class="circle">\u2713</span></button>';
+    html += '<span class="num">' + (i + 1) + '</span>';
+    html += '<span class="name">' + esc(p.name);
+    if (p.tag) html += ' <span class="tag">' + esc(p.tag) + '</span>';
+    html += '</span>';
+    html += '<button class="absent-btn" data-action="absent">\u4E0D\u53C2\u52A0</button>';
+    div.innerHTML = html;
+    list.appendChild(div);
+  }
+
+  var remain = state.names.length - came - absent;
+  document.getElementById("cameCount").textContent = "\u6765\u5834 " + came;
+  document.getElementById("absentCount").textContent = "\u4E0D\u53C2\u52A0 " + absent;
+  document.getElementById("remainCount").textContent = "\u672A\u78BA\u8A8D " + remain;
+  document.getElementById("totalText").textContent = "\u5168 " + state.names.length + " \u540D";
+  document.getElementById("eventName").textContent = state.fileName || "";
+}
+
+function esc(s) {
+  var d = document.createElement("span");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// --- Events ---
+document.getElementById("list").addEventListener("click", function(e) {
+  var btn = e.target;
+  while (btn && !btn.getAttribute("data-action")) btn = btn.parentElement;
+  if (!btn) return;
+
+  var item = btn;
+  while (item && !item.getAttribute("data-idx")) item = item.parentElement;
+  if (!item) return;
+
+  var idx = parseInt(item.getAttribute("data-idx"));
+  var action = btn.getAttribute("data-action");
+  var p = state.names[idx];
+
+  // toggle: same action again → reset to none
+  if (p.status === action) {
+    p.status = "";
+  } else {
+    p.status = action;
+  }
+  save();
+  render();
+});
+
+// File input
+document.getElementById("fileInput").addEventListener("change", function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var text = ev.target.result;
+    var lines = text.split(/\r?\n/).filter(function(l) { return l.trim() !== ""; });
+    if (lines.length === 0) return;
+
+    state = {
+      fileName: file.name.replace(/\.txt$/i, ""),
+      names: lines.map(function(line) {
+        // "名前" or "名前<TAB>タグ" or "名前,タグ"
+        var parts = line.split(/[\t,]/);
+        return {
+          name: parts[0].trim(),
+          tag: parts[1] ? parts[1].trim() : "",
+          status: ""
+        };
+      })
+    };
+    save();
+    showMain();
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+// Add person
+document.getElementById("addBtn").addEventListener("click", function() {
+  var input = document.getElementById("addInput");
+  var name = input.value.trim();
+  if (!name || !state) return;
+  state.names.push({ name: name, tag: "", status: "" });
+  save();
+  render();
+  input.value = "";
+});
+document.getElementById("addInput").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") document.getElementById("addBtn").click();
+});
+
+// Reset (clear all statuses)
+document.getElementById("resetBtn").addEventListener("click", function() {
+  showModal("\u5168\u54E1\u306E\u30C1\u30A7\u30C3\u30AF\u3092\u30EA\u30BB\u30C3\u30C8\u3057\u307E\u3059\u304B\uFF1F", function() {
+    for (var i = 0; i < state.names.length; i++) state.names[i].status = "";
+    save();
+    render();
+  });
+});
+
+// New (load different file)
+document.getElementById("newBtn").addEventListener("click", function() {
+  showModal("\u65B0\u3057\u3044\u540D\u7C3F\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3059\u304B\uFF1F\n\u73FE\u5728\u306E\u30C7\u30FC\u30BF\u306F\u524A\u9664\u3055\u308C\u307E\u3059\u3002", function() {
+    localStorage.removeItem(STORAGE_KEY);
+    state = null;
+    showSetup();
+  });
+});
+
+// Modal
+var modalCallback = null;
+function showModal(msg, cb) {
+  document.getElementById("modalMsg").textContent = msg;
+  document.getElementById("modalBg").className = "modal-bg show";
+  modalCallback = cb;
+}
+document.getElementById("modalCancel").addEventListener("click", function() {
+  document.getElementById("modalBg").className = "modal-bg";
+  modalCallback = null;
+});
+document.getElementById("modalOk").addEventListener("click", function() {
+  document.getElementById("modalBg").className = "modal-bg";
+  if (modalCallback) modalCallback();
+  modalCallback = null;
+});
+
+// View switching
+function showSetup() {
+  document.getElementById("setupView").style.display = "";
+  document.getElementById("mainView").style.display = "none";
+}
+function showMain() {
+  document.getElementById("setupView").style.display = "none";
+  document.getElementById("mainView").style.display = "";
+  render();
+}
+
+// Init
+var saved = load();
+if (saved && saved.names && saved.names.length > 0) {
+  state = saved;
+  showMain();
+}
+
+// Service Worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>
