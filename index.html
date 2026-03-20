@@ -57,6 +57,7 @@ header .event-name{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px}
 .toolbar .add-wrap{display:flex;gap:6px;flex:1}
 .toolbar .add-wrap input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);min-width:0}
 .toolbar .add-wrap button{color:#007aff;border-color:#007aff;white-space:nowrap}
+#exportBtn{color:#007aff;border-color:#007aff}
 
 /* dialog */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
@@ -100,6 +101,7 @@ header .event-name{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px}
 <input type="text" id="addInput" placeholder="名前を追加">
 <button id="addBtn">追加</button>
 </div>
+<button id="exportBtn">共有</button>
 <button id="resetBtn">リセット</button>
 <button id="newBtn">新規</button>
 </div>
@@ -241,6 +243,43 @@ document.getElementById("addBtn").addEventListener("click", function() {
 });
 document.getElementById("addInput").addEventListener("keydown", function(e) {
   if (e.key === "Enter") document.getElementById("addBtn").click();
+});
+
+// Export
+document.getElementById("exportBtn").addEventListener("click", function() {
+  if (!state) return;
+  var came = [], absent = [], unknown = [];
+  for (var i = 0; i < state.names.length; i++) {
+    var p = state.names[i];
+    if (p.status === "came") came.push(p.name);
+    else if (p.status === "absent") absent.push(p.name);
+    else unknown.push(p.name);
+  }
+  var text = state.fileName + "\n";
+  text += new Date().toLocaleString("ja-JP") + "\n\n";
+  text += "--- \u6765\u5834 (" + came.length + "\u540D) ---\n";
+  for (var i = 0; i < came.length; i++) text += came[i] + "\n";
+  text += "\n--- \u4E0D\u53C2\u52A0 (" + absent.length + "\u540D) ---\n";
+  for (var i = 0; i < absent.length; i++) text += absent[i] + "\n";
+  if (unknown.length > 0) {
+    text += "\n--- \u672A\u78BA\u8A8D (" + unknown.length + "\u540D) ---\n";
+    for (var i = 0; i < unknown.length; i++) text += unknown[i] + "\n";
+  }
+  text += "\n\u5408\u8A08: " + state.names.length + "\u540D (\u6765\u5834" + came.length + " / \u4E0D\u53C2\u52A0" + absent.length + " / \u672A\u78BA\u8A8D" + unknown.length + ")";
+
+  var blob = new Blob([text], { type: "text/plain" });
+  var file = new File([blob], (state.fileName || "attendance") + "_result.txt", { type: "text/plain" });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] });
+  } else {
+    // fallback: download
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 });
 
 // Reset (clear all statuses)
